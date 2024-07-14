@@ -1,15 +1,24 @@
-FROM golang:1-alpine
+FROM golang:1-alpine as builder
+
+RUN apk --no-cache --no-progress add git ca-certificates tzdata make \
+    && update-ca-certificates \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
-COPY go.mod ./
+# Download go modules
+COPY go.mod .
 
-RUN go mod download
+RUN GO111MODULE=on GOPROXY=https://proxy.golang.org go mod download
 
-COPY *.go ./
+COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /qube-server
+RUN make build
 
+# Create a minimal container to run a Golang static binary
+FROM scratch
+
+COPY --from=builder /app/qube-server .
+
+ENTRYPOINT ["/qube-server"]
 EXPOSE 8080
-
-CMD [ "/qube-server" ]
